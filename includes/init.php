@@ -140,6 +140,7 @@ class WPLMS_CLEVERCOURSE_INIT{
     }
 
     function migrate_course_settings($course_id){
+        $this->final_quiz = 0;
         $settings = get_post_meta($course_id,'gdlr-lms-course-settings',true);
         if(!empty($settings)){
             if(!empty($settings['prerequisite-course'])){
@@ -152,12 +153,21 @@ class WPLMS_CLEVERCOURSE_INIT{
                 update_post_meta($course_id,'vibe_course_offline','H');
             }
 
+            if(!empty($settings['quiz'])){
+                $this->final_quiz = $settings['quiz'];
+            }
+
             if(!empty($settings['start-date'])){
                 update_post_meta($course_id,'vibe_start_date',$settings['start-date']);
             }
 
-            if(!empty($settings['course-time'])){
-                update_post_meta($course_id,'vibe_duration',$settings['course-time']);
+            if(!empty($settings['start-date']) && !empty($settings['end-date'])){
+                $start_time = strtotime($settings['start-date']);
+                $end_time = strtotime($settings['end-date']);
+                $course_duration = $end_time - $start_time;
+                $course_duration = $course_duration/86400;
+                update_post_meta($course_id,'vibe_duration',$course_duration);
+                update_post_meta($course_id,'vibe_course_duration_parameter',86400);
             }else{
                 update_post_meta($course_id,'vibe_duration',9999);
             }
@@ -165,6 +175,8 @@ class WPLMS_CLEVERCOURSE_INIT{
             if(!empty($settings['max-seat'])){
                 update_post_meta($course_id,'vibe_max_students',$settings['max-seat']);
             }
+
+            $this->course_pricing($settings,$course_id);
 
             if(!empty($settings['enable-badge']) && $settings['enable-badge'] == 'enable'){
                 update_post_meta($course_id,'vibe_badge','S');
@@ -176,7 +188,8 @@ class WPLMS_CLEVERCOURSE_INIT{
                     update_post_meta($course_id,'vibe_course_badge_title',$settings['badge-title']);
                 }
                 if(!empty($settings['badge-file'])){
-                    
+                    $attachment_id = $this->add_badge_attachment($settings['badge-file']);
+                    update_post_meta($course_id,'vibe_course_badge',$attachment_id);
                 }
             }
 
@@ -229,6 +242,9 @@ class WPLMS_CLEVERCOURSE_INIT{
 
                     if(!empty($data['section-quiz'])){
                         $this->curriculum[] = $data['section-quiz'];
+                    }
+                    if($this->final_quiz > 0){
+                        $this->curriculum[] = $this->final_quiz;
                     }
                 }
             }
@@ -333,7 +349,7 @@ class WPLMS_CLEVERCOURSE_INIT{
                         }
                     }
 
-                    if(!empty($data['time-period']){
+                    if(!empty($data['time-period'])){
                         $duration = $duration + $data['time-period'];
                     }
                 }
@@ -347,6 +363,54 @@ class WPLMS_CLEVERCOURSE_INIT{
         }
         update_post_meta($quiz_id,'vibe_quiz_duration_parameter',60);
         update_post_meta($quiz_id,'vibe_quiz_questions',$quiz_questions);
+    }
+
+    function course_pricing($settings,$course_id){
+
+        if(!empty($settings['price'])){
+
+            $post_args=array('post_type' => 'product','post_status'=>'publish','post_title'=>get_the_title($course_id));
+            $product_id = wp_insert_post($post_args);
+            update_post_meta($product_id,'vibe_subscription','H');
+
+            update_post_meta($product_id,'_regular_price',$settings['price']);
+            update_post_meta($product_id,'_price',$settings['price']);
+            if(!empty($settings['discount-price'])){
+                update_post_meta($product_id,'_sale_price',$settings['discount-price']);
+            }
+
+            wp_set_object_terms($product_id, 'simple', 'product_type');
+            update_post_meta($product_id,'_visibility','visible');
+            update_post_meta($product_id,'_virtual','yes');
+            update_post_meta($product_id,'_downloadable','yes');
+            update_post_meta($product_id,'_sold_individually','yes');
+
+            $max_seats = get_post_meta($course_id,'vibe_max_students',true);
+            if(!empty($max_seats) && $max_seats < 9999){
+                update_post_meta($product_id,'_manage_stock','yes');
+                update_post_meta($product_id,'_stock',$max_seats);
+            }
+            
+            $courses = array($course_id);
+            update_post_meta($product_id,'vibe_courses',$courses);
+            update_post_meta($course_id,'vibe_product',$product_id);
+
+            $thumbnail_id = get_post_thumbnail_id($course_id);
+            if(!empty($thumbnail_id))
+                set_post_thumbnail($product_id,$thumbnail_id);
+        }
+    }
+
+    function add_badge_attachment($url){
+        $parsed_url  = explode( parse_url( WP_CONTENT_URL, PHP_URL_PATH ), $url );
+        $this_host = str_ireplace( 'www.', '', parse_url( home_url(), PHP_URL_HOST ) );
+        $file_host = str_ireplace( 'www.', '', parse_url( $url, PHP_URL_HOST ) );
+        if ( ! isset( $parsed_url[1] ) || empty( $parsed_url[1] ) || ( $this_host != $file_host ) ) {
+            return;
+        }
+        global $wpdb;
+        $attachment = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->prefix}posts WHERE guid RLIKE %s;", $parsed_url[1] ) );
+        return $attachment[0];
     }
 }
 
