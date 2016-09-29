@@ -56,7 +56,25 @@ class WPLMS_CLEVERCOURSE_INIT{
                                 cache: false,
                                 success: function (json) {
                                     $('#migration_clevercourse_courses').append('<div class="wplms_cc_progress" style="width:100%;margin-bottom:20px;height:10px;background:#fafafa;border-radius:10px;overflow:hidden;"><div class="bar" style="padding:0 1px;background:#37cc0f;height:100%;width:0;"></div></div>');
-                                    $.ajax({
+
+                                    var x = 0;
+                                    var width = 100*1/json.length;
+                                    var number = width;
+                                    var loopArray = function(arr) {
+                                        wpcc_ajaxcall(arr[x],function(){
+                                            x++;
+                                            if(x < arr.length) {
+                                                loopArray(arr);   
+                                            }
+                                        }); 
+                                    }
+                                    
+                                    // start 'loop'
+                                    loopArray(json);
+
+                                    function wpcc_ajaxcall(obj,callback) {
+                                        
+                                        $.ajax({
                                             type: "POST",
                                             dataType: 'json',
                                             url: ajaxurl,
@@ -67,48 +85,18 @@ class WPLMS_CLEVERCOURSE_INIT{
                                             },
                                             cache: false,
                                             success: function (html) {
-                                                var x = 0;
-                                                var width = 100*1/json.length;
-                                                var number = width;
-                                                var loopArray = function(arr) {
-                                                    wpcc_ajaxcall(arr[x],function(){
-                                                        x++;
-                                                        if(x < arr.length) {
-                                                            loopArray(arr);   
-                                                        }
-                                                    }); 
-                                                }
-                                                
-                                                // start 'loop'
-                                                loopArray(json);
-
-                                                function wpcc_ajaxcall(obj,callback) {
-                                                    
-                                                    $.ajax({
-                                                        type: "POST",
-                                                        dataType: 'json',
-                                                        url: ajaxurl,
-                                                        data: {
-                                                            action:'migration_cc_course_to_wplms', 
-                                                            security: $('#security').val(),
-                                                            id:obj.id,
-                                                        },
-                                                        cache: false,
-                                                        success: function (html) {
-                                                            number = number + width;
-                                                            $('.wplms_cc_progress .bar').css('width',number+'%');
-                                                            if(number >= 100){
-                                                                $('#migration_clevercourse_courses').removeClass('error');
-                                                                $('#migration_clevercourse_courses').addClass('updated');
-                                                                $('#cc_message').html('<strong>'+x+' '+'<?php _e('Courses successfully migrated from Clevercourse to WPLMS','wplms-cc'); ?>'+'</strong>');
-                                                            }
-                                                        }
-                                                    });
-                                                    // do callback when ready
-                                                    callback();
+                                                number = number + width;
+                                                $('.wplms_cc_progress .bar').css('width',number+'%');
+                                                if(number >= 100){
+                                                    $('#migration_clevercourse_courses').removeClass('error');
+                                                    $('#migration_clevercourse_courses').addClass('updated');
+                                                    $('#cc_message').html('<strong>'+x+' '+'<?php _e('Courses successfully migrated from Clevercourse to WPLMS','wplms-cc'); ?>'+'</strong>');
                                                 }
                                             }
-
+                                        });
+                                        // do callback when ready
+                                        callback();
+                                    } 
                                 }
                             });
                         });
@@ -134,6 +122,8 @@ class WPLMS_CLEVERCOURSE_INIT{
 
         update_option('wplms_clevercourse_migration',1);
 
+        $this->migrate_quiz_settings();
+
         print_r(json_encode($json));
         die();
     }
@@ -147,7 +137,6 @@ class WPLMS_CLEVERCOURSE_INIT{
         global $wpdb;
         $this->migrate_course_settings($_POST['id']);
         $this->build_course_curriculum($_POST['id']);
-        $this->migrate_quiz_settings();
     }
 
     function migrate_course_settings($course_id){
@@ -228,6 +217,8 @@ class WPLMS_CLEVERCOURSE_INIT{
                                     'post_title' => $unit['lecture-name'],
                                     'post_content' => $unit['lecture-content'],
                                     'post_author' => $author_id,
+                                    'post_status' => 'publish',
+                                    'comment_status' => 'open',
                                     'post_type' => 'unit'
                                 );
 
@@ -257,8 +248,105 @@ class WPLMS_CLEVERCOURSE_INIT{
                         update_post_meta($quiz->id,'vibe_quiz_retakes',$quiz_settings['retake-times']);
                     }
                 }
+                $this->migrate_quiz_questions($quiz->id);
             }
         }
+    }
+
+    function migrate_quiz_questions($quiz_id){
+        global $post;
+        $author_id = $post->post_author;
+        $quiz_questions = array('ques'=>array(),'marks'=>array());
+        $duration = 0;
+
+        $content_settings = get_post_meta($quiz_id,'gdlr-lms-content-settings',true);
+        if(!empty($content_settings)){
+            if(function_exists('gdlr_fw2_decode_preventslashes')){
+                $data_val = gdlr_fw2_decode_preventslashes($content_settings);
+                $data_array = json_decode($data_val, true);
+                $data_array = (array) $data_array;
+
+                foreach($data_array as $data){
+                    if(!empty($data['section-name'])){
+                        $section_name = $data['section-name'];
+                    }
+
+                    if(!empty($data['question-type'])){
+                        $question_type = $data['question-type'];
+                        if(!empty($data['question'])){
+                            $total_questions = $data['question'];
+                            $questions = json_decode($total_questions, true);
+                            foreach($questions as $question){
+                                $title = substr($question['question'],0,50);
+                                $title = $section_name.$title;
+                                $insert_question = array(
+                                        'post_title' => $title,
+                                        'post_content' => $question['question'],
+                                        'post_author' => $author_id,
+                                        'post_status' => 'publish',
+                                        'comment_status' => 'open',
+                                        'post_type' => 'question'
+                                    );
+
+                                $question_id = wp_insert_post( $insert_question, true);
+                                $quiz_questions['ques'][] = $question_id;
+                                $quiz_questions['marks'][] = $question['score'];
+
+                                switch ($question_type) {
+                                    case 'single':
+                                        if(!empty($question['quiz-choice'])){
+                                            $options = $question['quiz-choice'];
+                                            update_post_meta($question_id,'vibe_question_options',$options);
+                                        }
+                                        if(!empty($question['quiz-answer'])){
+                                            update_post_meta($question_id,'vibe_question_answer',$question['quiz-answer']);
+                                        }
+                                        break;
+
+                                    case 'multiple':
+                                        if(!empty($question['quiz-choice'])){
+                                            $options = $question['quiz-choice'];
+                                            update_post_meta($question_id,'vibe_question_options',$options);
+                                        }
+                                        if(!empty($question['quiz-answer'])){
+                                            update_post_meta($question_id,'vibe_question_answer',$question['quiz-answer']);
+                                        }
+                                        break;
+
+                                    case 'small':
+                                        if(!empty($question['quiz-answer'])){
+                                            update_post_meta($question_id,'vibe_question_answer',$question['quiz-answer']);
+                                        }
+                                        $question_type = 'smalltext';
+                                        break;
+
+                                    case 'large':
+                                        if(!empty($question['quiz-answer'])){
+                                            update_post_meta($question_id,'vibe_question_answer',$question['quiz-answer']);
+                                        }
+                                        $question_type = 'largetext';
+                                        break;
+                                }
+                                    
+                                update_post_meta($question_id,'vibe_question_type',$question_type);
+                            }
+                        }
+                    }
+
+                    if(!empty($data['time-period']){
+                        $duration = $duration + $data['time-period'];
+                    }
+                }
+            }
+        }
+
+        if($duration > 0){
+            update_post_meta($quiz_id,'vibe_duration',$duration);
+        }else{
+            update_post_meta($quiz_id,'vibe_duration',9999);
+        }
+        update_post_meta($quiz_id,'vibe_quiz_duration_parameter',60);
+        update_post_meta($quiz_id,'vibe_quiz_questions',$quiz_questions);
     }
 }
 
