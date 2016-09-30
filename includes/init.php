@@ -32,9 +32,24 @@ class WPLMS_CLEVERCOURSE_INIT{
     }
 
     function migration_notice(){
-        $this->migration_status = get_option('wplms_clevercourse_migration');  
+        $this->migration_status = get_option('wplms_clevercourse_migration'); 
+
+        $check = 0;
+        ?>
+        <div class="welcome-panel" id="welcome_ccm_panel" style="padding-bottom:20px;width:96%">
+            <h1>Please note: Woocommerce must be activated if using paid courses.</h1>
+            <p>Please click on the button below to proceed to migration proccess</p>
+            <form method="POST">
+                <input name="click" type="submit" value="Click Here" class="button">
+            </form>
+        </div>
+        <?php
+        if(isset($_POST['click'])){
+            $check = 1;
+            ?> <style> #welcome_ccm_panel{display:none;} </style> <?php
+        } 
         
-        if(empty($this->migration_status)){
+        if(empty($this->migration_status) && $check){
             ?>
             <div id="migration_clevercourse_courses" class="error notice ">
                <p id="cc_message"><?php printf( __('Migrate clevercourse coruses to WPLMS %s Begin Migration Now %s', 'wplms-cc' ),'<a id="begin_wplms_clevercourse_migration" class="button primary">','</a>'); ?>
@@ -90,7 +105,7 @@ class WPLMS_CLEVERCOURSE_INIT{
                                                 if(number >= 100){
                                                     $('#migration_clevercourse_courses').removeClass('error');
                                                     $('#migration_clevercourse_courses').addClass('updated');
-                                                    $('#cc_message').html('<strong>'+x+' '+'<?php _e('Courses successfully migrated from Clevercourse to WPLMS','wplms-cc'); ?>'+'</strong>');
+                                                    $('#cc_message').html('<strong>'+x+' '+'<?php _e('Courses successfully migrated from Clevercourse to WPLMS <p style="font-size:16px;color:#0073aa;">Please deactivate goodlayer plugins and activate the WPLMS theme and plugins OR install WPLMS theme to check migrated courses in wplms</p>','wplms-cc'); ?>'+'</strong>');
                                                 }
                                             }
                                         });
@@ -141,7 +156,9 @@ class WPLMS_CLEVERCOURSE_INIT{
 
     function migrate_course_settings($course_id){
         $this->final_quiz = 0;
-        $settings = get_post_meta($course_id,'gdlr-lms-course-settings',true);
+        $course_settings = get_post_meta($course_id,'gdlr-lms-course-settings',true);
+        $settings = json_decode($course_settings, true);
+        $settings = (array) $settings;
         if(!empty($settings)){
             if(!empty($settings['prerequisite-course'])){
                 update_post_meta($course_id,'vibe_pre_course',$settings['prerequisite-course']);
@@ -176,7 +193,10 @@ class WPLMS_CLEVERCOURSE_INIT{
                 update_post_meta($course_id,'vibe_max_students',$settings['max-seat']);
             }
 
-            $this->course_pricing($settings,$course_id);
+            //Create product and connect for price.
+            if ( in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins', get_option( 'active_plugins' ) ) ) ) {
+                $this->course_pricing($settings,$course_id);
+            } 
 
             if(!empty($settings['enable-badge']) && $settings['enable-badge'] == 'enable'){
                 update_post_meta($course_id,'vibe_badge','S');
@@ -242,9 +262,11 @@ class WPLMS_CLEVERCOURSE_INIT{
 
                     if(!empty($data['section-quiz'])){
                         $this->curriculum[] = $data['section-quiz'];
+                        update_post_meta($data['section-quiz'],'vibe_quiz_course',$course_id);
                     }
                     if($this->final_quiz > 0){
                         $this->curriculum[] = $this->final_quiz;
+                        update_post_meta($this->final_quiz,'vibe_quiz_course',$course_id);
                     }
                 }
             }
@@ -258,7 +280,9 @@ class WPLMS_CLEVERCOURSE_INIT{
         $quizzes = $wpdb->get_results("SELECT id FROM {$wpdb->posts} where post_type='quiz'");
         if(!empty($quizzes)){
             foreach($quizzes as $quiz){
-                $quiz_settings = get_post_meta($quiz->id,'gdlr-lms-quiz-settings',true);
+                $settings = get_post_meta($quiz->id,'gdlr-lms-quiz-settings',true);
+                $quiz_settings = json_decode($settings, true);
+                $quiz_settings = (array) $quiz_settings;
                 if(!empty($quiz_settings)){
                     if(!empty($quiz_settings['retake-times'])){
                         update_post_meta($quiz->id,'vibe_quiz_retakes',$quiz_settings['retake-times']);
