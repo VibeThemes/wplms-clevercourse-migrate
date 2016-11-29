@@ -124,7 +124,7 @@ class WPLMS_CLEVERCOURSE_INIT{
 
     function migration_cc_courses(){
         if ( !isset($_POST['security']) || !wp_verify_nonce($_POST['security'],'security') || !is_user_logged_in()){
-            _e('Security check Failed. Contact Administrator.','vibe');
+            _e('Security check Failed. Contact Administrator.','wplms-cc');
             die();
         }
 
@@ -145,7 +145,7 @@ class WPLMS_CLEVERCOURSE_INIT{
 
     function migration_cc_course_to_wplms(){
         if ( !isset($_POST['security']) || !wp_verify_nonce($_POST['security'],'security') || !is_user_logged_in()){
-            _e('Security check Failed. Contact Administrator.','vibe');
+            _e('Security check Failed. Contact Administrator.','wplms-cc');
             die();
         }
 
