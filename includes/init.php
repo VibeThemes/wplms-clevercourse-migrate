@@ -1,7 +1,7 @@
 <?php
 /**
  * Initialization functions for WPLMS CLEVERCOURSE MIGRATION
- * @author      VibeThemes
+ * @author      H.K.Latiyan(VibeThemes)
  * @category    Admin
  * @package     Initialization
  * @version     1.0
