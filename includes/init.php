@@ -34,16 +34,19 @@ class WPLMS_CLEVERCOURSE_INIT{
     function migration_notice(){
         $this->migration_status = get_option('wplms_clevercourse_migration'); 
 
-        $check = 0;
-        ?>
-        <div class="welcome-panel" id="welcome_ccm_panel" style="padding-bottom:20px;width:96%">
-            <h1>Please note: Woocommerce must be activated if using paid courses.</h1>
-            <p>Please click on the button below to proceed to migration proccess</p>
-            <form method="POST">
-                <input name="click" type="submit" value="Click Here" class="button">
-            </form>
-        </div>
-        <?php
+        $check = 1;
+        if(!function_exists('woocommerce')){
+            $check = 0;
+            ?>
+            <div class="welcome-panel" id="welcome_ccm_panel" style="padding-bottom:20px;width:96%">
+                <h1><?php echo __('Please note: Woocommerce must be activated if using paid courses.','wplms-lp'); ?></h1>
+                <p><?php echo __('Please click on the button below to proceed to migration proccess','wplms-lp'); ?></p>
+                <form method="POST">
+                    <input name="click" type="submit" value="<?php echo __('Click Here','wplms-lp'); ?>" class="button">
+                </form>
+            </div>
+            <?php
+        }
         if(isset($_POST['click'])){
             $check = 1;
             ?> <style> #welcome_ccm_panel{display:none;} </style> <?php
